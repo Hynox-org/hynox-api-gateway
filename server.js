@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const cors = require("cors");
 const proxy = require("express-http-proxy");
@@ -7,46 +8,48 @@ require("dotenv").config();
 
 const app = express();
 
-// ---------- Middlewares ----------
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: ["http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true, 
+    credentials: true,
   })
 );
 
-// ---------- Supabase Auth Middleware ----------
+// ✅ Supabase authentication middleware (runs for all requests)
 app.use(supabaseAuth);
 
-// ---------- Proxy Routes Without /api in Frontend ----------
+// ✅ Single proxy for all /identity requests
 app.use(
-  "/auth",
+  "/identity",
   proxy("http://localhost:5000", {
+    proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
+      // Add Supabase user info headers
+      if (srcReq.auth) {
+        proxyReqOpts.headers["x-user-id"] = srcReq.auth.id;
+        proxyReqOpts.headers["x-user-role"] = srcReq.auth.role || "";
+        proxyReqOpts.headers["x-user-token"] = srcReq.auth.token;
+      }
+      return proxyReqOpts;
+    },
+
+    // Dynamically build backend path
+    // Incoming:  /identity/auth/login
+    // Goes to:   http://localhost:5000/identity/api/auth/
     proxyReqPathResolver: (req) => {
-      // Add /api prefix before forwarding to backend
-      return `/api${req.originalUrl}`;
+      const path = req.originalUrl; // e.g., /identity/auth/login
+      return `/identity/api${path.replace(/^\/identity/, "")}`;
     },
   })
 );
 
-app.use(
-  "/org",
-  proxy("http://localhost:5000", {
-    proxyReqPathResolver: (req) => {
-      return `/api${req.originalUrl}`;
-    },
-  })
-);
-
-// ---------- Test Route ----------
+// ✅ Health check
 app.get("/", (req, res) => {
   res.json({ msg: "API Gateway active and token verified ✅" });
 });
 
-// ---------- Start Server ----------
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🚀 API Gateway running on port ${PORT}`);
