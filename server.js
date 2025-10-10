@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: ["process.env.CRM_FRONTEND"],
+    origin: [process.env.CRM_FRONTEND],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -41,7 +41,7 @@ app.use((req, res, next) => {
 // Single proxy for all identity-based routes
 app.use(
   "/identity",
-  proxy("process.env.AUTH_SERVICE", {
+  proxy(process.env.AUTH_SERVICE, {
     proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
       // Forward user details if authenticated
       if (srcReq.auth) {
@@ -52,7 +52,10 @@ app.use(
       return proxyReqOpts;
     },
     // Preserve backend path structure
-    proxyReqPathResolver: (req) => `/identity${req.url}`,
+    proxyReqPathResolver: (req) => {
+      console.log(`/identity${req.url}`);
+      return `/identity${req.url}`;
+    },
   })
 );
 
