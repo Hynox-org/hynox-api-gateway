@@ -1,14 +1,14 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
-const proxy = require("express-http-proxy");
+// const proxy = require("express-http-proxy");
 const bodyParser = require("body-parser");
 const supabaseAuth = require("./middleware/supabaseAuth");
+const authGateway = require("./routes/authGateway");
+const orgGateway = require("./routes/orgGateway");
 require("dotenv").config();
 
 const app = express();
 
-// ---------------- MIDDLEWARE SETUP ----------------
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(
@@ -19,53 +19,23 @@ app.use(
   })
 );
 
-// ---------------- PUBLIC ROUTES ----------------
-// These routes do NOT require authentication
+// Public routes (skip auth)
 const publicRoutes = [
   "/identity/api/auth/signup",
   "/identity/api/auth/login",
 ];
 
-// ---------------- AUTH CHECK ----------------
 app.use((req, res, next) => {
-  // Skip Supabase auth for public routes
-  if (publicRoutes.includes(req.path)) {
-    return next();
-  }
-
-  // For all other routes, verify user via Supabase
-  return supabaseAuth(req, res, next);
+  if (publicRoutes.includes(req.path)) return next();
+  return supabaseAuth()(req, res, next);
 });
 
-// ---------------- PROXY SETUP ----------------
-// Single proxy for all identity-based routes
-app.use(
-  "/identity",
-  proxy(process.env.AUTH_SERVICE, {
-    proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
-      // Forward user details if authenticated
-      if (srcReq.auth) {
-        proxyReqOpts.headers["x-user-id"] = srcReq.auth.id;
-        proxyReqOpts.headers["x-user-role"] = srcReq.auth.role || "";
-        proxyReqOpts.headers["x-user-token"] = srcReq.auth.token;
-      }
-      return proxyReqOpts;
-    },
-    // Preserve backend path structure
-    proxyReqPathResolver: (req) => {
-      console.log(`/identity${req.url}`);
-      return `/identity${req.url}`;
-    },
-  })
+app.use("/identity/api/auth", authGateway);
+app.use("/identity/api/org", orgGateway);
+
+// Root route
+app.get("/", (req, res) => res.json({ msg: "🚀 API Gateway running" }));
+
+app.listen(process.env.PORT, () =>
+  console.log("✅ API Gateway started")
 );
-
-// ---------------- ROOT ROUTE ----------------
-app.get("/", (req, res) => {
-  res.json({ msg: " API Gateway active and routing requests correctly ✅" });
-});
-
-// ---------------- START SERVER ----------------
-const PORT = process.env.PORT;
-app.listen(PORT, () => {
-  console.log(` API Gateway running on port ${PORT}`);
-});
