@@ -23,6 +23,7 @@ app.use(
 const publicRoutes = [
   "/identity/api/auth/signup",
   "/identity/api/auth/login",
+  "/identity/api/auth/validate-token",
 ];
 
 app.use((req, res, next) => {

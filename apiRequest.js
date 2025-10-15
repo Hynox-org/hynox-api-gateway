@@ -4,7 +4,7 @@ const DB_SERVICE_URL = process.env.AUTH_SERVICE;
 async function callDBService(endpoint, method, data) {
   try {
     const url = `${DB_SERVICE_URL}${endpoint}`;
-console.log("➡️ Forwarding to:", url); // add this
+    console.log("➡️ Forwarding to:", url); // add this
     console.log("📦 Payload:", data);
     const options = {
       method: method.toLowerCase(),

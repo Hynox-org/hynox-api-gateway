@@ -114,6 +114,25 @@ router.post("/login", async (req, res) => {
   }
 });
 
+/* ---------------------- VALIDATE TOKEN ---------------------- */
+router.post("/validate-token", supabaseAuth(), async (req, res) => {
+  try {
+    // If the middleware successfully validated the token,
+    // req.auth will contain the user information.
+    // We can simply return a success response.
+    res.status(200).json({
+      message: "Token is valid",
+      user: {
+        id: req.auth.id,
+        role: req.auth.role,
+      },
+    });
+  } catch (error) {
+    console.error("Validate Token Error (Gateway):", error);
+    res.status(500).json({ message: "Internal Server Error", details: error.message });
+  }
+});
+
 // ----------------- Update Profile -----------------
 router.put("/update/:userId", supabaseAuth() , async (req, res) => {
 
