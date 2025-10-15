@@ -161,4 +161,30 @@ router.put("/update/:userId", supabaseAuth() , async (req, res) => {
 });
 
 
+/* ---------------------- OAUTH LOGIN ---------------------- */
+router.get("/oauth/login/:provider", async (req, res) => {
+  try {
+    const { provider } = req.params;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: process.env.SUPABASE_OAUTH_REDIRECT_URL || "http://localhost:3000/auth/callback", // Replace with your actual redirect URL
+      },
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
+    res.status(200).json({
+      message: "OAuth login initiated",
+      url: data.url,
+    });
+  } catch (error) {
+    console.error("OAuth Login Error (Gateway):", error);
+    res.status(500).json({ message: "Internal Server Error", details: error.message });
+  }
+});
+
 module.exports = router;
