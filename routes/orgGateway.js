@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { createClient } = require("@supabase/supabase-js");
 const { callDBService } = require("../apiRequest");
-const supabaseAuth = require("../middleware/supabaseAuth");
+const roleAuth = require("../middleware/roleAuth");
 
 // Initialize Supabase service role client (admin)
 const supabase = createClient(
@@ -12,10 +12,10 @@ const supabase = createClient(
 );
 
 /* ---------------------- SETUP ORGANIZATION ---------------------- */
-router.post("/setup", supabaseAuth(["super_admin"]), async (req, res) => {
+router.post("/setup", roleAuth(["super_admin"]), async (req, res) => {
   try {
     const { orgName, empCount, serviceName } = req.body;
-    const {  id:userId, role } = req.auth;
+    const {  id:userId, role } = req.user;
 
     // Forward org creation to Auth-Service (DB operation only)
     const dbResponse = await callDBService("/identity/api/org/setup", "POST", {
@@ -38,11 +38,9 @@ router.post("/setup", supabaseAuth(["super_admin"]), async (req, res) => {
 });
 
 /* ---------------------- ASSIGN USER UNDER ORG ---------------------- */
-router.post("/assign-user", supabaseAuth(["super_admin"]), async (req, res) => {
+router.post("/assign-user", roleAuth(["super_admin"]), async (req, res) => {
   try {
     const { fullName, email, password, countryCode, phoneNumber, orgId, role } = req.body;
-
-    // console.log(token);
 
     // 1️⃣ Create user in Supabase (admin-level)
     const { data: supabaseData, error: supabaseError } =
@@ -83,7 +81,7 @@ router.post("/assign-user", supabaseAuth(["super_admin"]), async (req, res) => {
   }
 });
 /* ---------------------- EDIT ORGANIZATION ---------------------- */
-router.put("/:orgId", supabaseAuth(["super_admin"]), async (req, res) => {
+router.put("/:orgId", roleAuth(["super_admin"]), async (req, res) => {
   try {
     const { orgId } = req.params;
     const { orgName, roles } = req.body;

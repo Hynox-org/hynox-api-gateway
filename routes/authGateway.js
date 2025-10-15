@@ -115,18 +115,16 @@ router.post("/login", async (req, res) => {
 });
 
 // ----------------- Update Profile -----------------
-router.put("/update/:userId", supabaseAuth() , async (req, res) => {
+router.put("/update/:userId" , async (req, res) => {
 
   try {
     const { userId } = req.params;
-    console.log("Request body:", req.body);
 
     const dbResponse = await callDBService(
       `/identity/api/auth/update/${userId}`,
       "PUT",
       req.body
     );
-    console.log("✅ Got DB response:", dbResponse);
 
     res.status(200).json({
       message: "Profile updated successfully",
