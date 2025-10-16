@@ -114,6 +114,25 @@ router.post("/login", async (req, res) => {
   }
 });
 
+/* ---------------------- VALIDATE TOKEN ---------------------- */
+router.post("/validate-token", supabaseAuth(), async (req, res) => {
+  try {
+    // If the middleware successfully validated the token,
+    // req.auth will contain the user information.
+    // We can simply return a success response.
+    res.status(200).json({
+      message: "Token is valid",
+      user: {
+        id: req.auth.id,
+        role: req.auth.role,
+      },
+    });
+  } catch (error) {
+    console.error("Validate Token Error (Gateway):", error);
+    res.status(500).json({ message: "Internal Server Error", details: error.message });
+  }
+});
+
 // ----------------- Update Profile -----------------
 router.put("/update/:userId" , async (req, res) => {
 
@@ -139,5 +158,31 @@ router.put("/update/:userId" , async (req, res) => {
   }
 });
 
+
+/* ---------------------- OAUTH LOGIN ---------------------- */
+router.get("/oauth/login/:provider", async (req, res) => {
+  try {
+    const { provider } = req.params;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: process.env.SUPABASE_OAUTH_REDIRECT_URL || "http://localhost:3000/auth/callback", // Replace with your actual redirect URL
+      },
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
+    res.status(200).json({
+      message: "OAuth login initiated",
+      url: data.url,
+    });
+  } catch (error) {
+    console.error("OAuth Login Error (Gateway):", error);
+    res.status(500).json({ message: "Internal Server Error", details: error.message });
+  }
+});
 
 module.exports = router;

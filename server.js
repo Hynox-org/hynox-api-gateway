@@ -25,11 +25,20 @@ app.use(
 const publicRoutes = [
   "/identity/api/auth/signup",
   "/identity/api/auth/login",
+  "/identity/api/auth/validate-token",
+  /^\/identity\/api\/auth\/oauth\/login\/.+$/, // Regex for OAuth login with provider
 ];
 
 app.use((req, res, next) => {
-  if (publicRoutes.includes(req.path)) return next();
-  return supabaseAuth(req, res, next);
+  const isPublicRoute = publicRoutes.some(route => {
+    if (typeof route === 'string') {
+      return route === req.path;
+    }
+    return route.test(req.path);
+  });
+
+  if (isPublicRoute) return next();
+  return supabaseAuth()(req, res, next);
 });
 
 app.use("/identity/api/auth", authGateway);
