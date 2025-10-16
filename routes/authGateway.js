@@ -90,7 +90,7 @@ router.post("/login", async (req, res) => {
     if (supabaseError)
       return res.status(401).json({ message: supabaseError.message });
 
-    const token = supabaseData.session?.access_token;
+    const accessToken = supabaseData.session?.access_token;
     const userId = supabaseData.user?.id;
     // 2️⃣ Forward to DB Service for org/service linkage
     const dbResponse = await callDBService("/identity/api/auth/login","POST" ,{
@@ -100,10 +100,10 @@ router.post("/login", async (req, res) => {
       planId,
       userId,
     });
-
+    
     res.status(200).json({
       message: "Login successful",
-      token,
+      accessToken,
       dbUser: dbResponse.user,
       action: dbResponse.action,
       orgDetails: dbResponse.org,
