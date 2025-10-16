@@ -38,11 +38,11 @@ app.use((req, res, next) => {
   });
 
   if (isPublicRoute) return next();
-  return supabaseAuth()(req, res, next);
+  return supabaseAuth(req, res, next);
 });
 
 app.use("/identity/api/auth", authGateway);
-app.use("/identity/api/org", orgGateway);
+app.use("/identity/api/org", orgGateway);   
 
 // ---------- CRM Proxy ----------
 app.use(

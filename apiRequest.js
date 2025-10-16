@@ -20,7 +20,19 @@ async function callDBService(endpoint, method, data) {
     return res.data;
   } catch (err) {
     console.error("DB Service Error:", err.response?.data || err.message);
-    throw err.response?.data || { message: "DB service error" };
+
+    // ✅ Normalize error and rethrow with proper structure
+    const message =
+      err.response?.data?.message ||
+      err.response?.data?.error ||
+      err.message ||
+      "DB service error";
+
+    // Make it a real Error object so gateway can read err.message
+    const error = new Error(message);
+    error.status = err.response?.status || 500;
+    error.data = err.response?.data || {};
+    throw error;
   }
 }
 

@@ -33,7 +33,20 @@ router.post("/setup", roleAuth(["super_admin"]), async (req, res) => {
     });
   } catch (err) {
     console.error("Gateway Org Setup Error:", err.message);
-    res.status(500).json({ message: "Internal server error", details: err.message });
+
+    // 🧠 Check if downstream provided custom error JSON
+    if (err.response && err.response.status) {
+      const status = err.response.status || 500;
+      const data = await err.response.json().catch(() => ({}));
+      return res
+        .status(status)
+        .json({ message: data.message || data.error || "Organization setup failed" });
+    }
+
+    // ✅ Default fallback
+    res.status(500).json({
+      message: err.message || "Organization setup failed",
+    });
   }
 });
 
