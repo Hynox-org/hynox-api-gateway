@@ -115,7 +115,7 @@ router.post("/login", async (req, res) => {
 });
 
 /* ---------------------- VALIDATE TOKEN ---------------------- */
-router.post("/validate-token", supabaseAuth(), async (req, res) => {
+router.post("/validate-token", supabaseAuth, async (req, res) => {
   try {
     // If the middleware successfully validated the token,
     // req.auth will contain the user information.
@@ -123,8 +123,8 @@ router.post("/validate-token", supabaseAuth(), async (req, res) => {
     res.status(200).json({
       message: "Token is valid",
       user: {
-        id: req.auth.id,
-        role: req.auth.role,
+        id: req.user.id,
+        role: req.user.role,
       },
     });
   } catch (error) {
