@@ -29,6 +29,8 @@ async function supabaseAuth(req, res, next) {
     // Attach user info for downstream use
     req.user = {
       id: user.id,
+      email: user.email,
+      fullname: user.user_metadata?.name || user.user_metadata?.full_name,
       role: user.user_metadata?.role?.toLowerCase().trim() || "user",
       token,
     };

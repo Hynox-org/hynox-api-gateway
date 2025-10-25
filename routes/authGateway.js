@@ -117,17 +117,72 @@ router.post("/login", async (req, res) => {
 /* ---------------------- VALIDATE TOKEN ---------------------- */
 router.post("/validate-token", supabaseAuth, async (req, res) => {
   try {
-    // If the middleware successfully validated the token,
-    // req.auth will contain the user information.
-    // We can simply return a success response.
+    const userId = req.user.id;
+    const email = req.user.email;
+    const fullName = req.user.fullname||req.user.email;
+    const currentRole = req.user.role;
+    console.log(fullName);
+    console.log("🔍 Current metadata role:", currentRole);
+
+    /* 1️⃣ checks user role in supabase */
+    if (!currentRole || ["user", "authenticated"].includes(currentRole)) {
+      const { error: metadataError } = await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: { ...req.user.user_metadata, role: "super_admin" },
+      });
+
+      if (metadataError) {
+        console.error("⚠️ Error updating user metadata:", metadataError);
+      } else {
+        console.log(`✅ Updated user metadata for ${email} → role: super_admin`);
+      }
+    } else {
+      console.log(`✅ User already has role: ${currentRole}`);
+    }
+
+    /* 4️⃣ Sync user to DB microservice */
+    const signupRes = await callDBService("/identity/api/auth/signup", "POST", {
+      userId,
+      fullName,
+      email,
+      role: "super_admin",
+    });
+
+    /* 5️⃣ Handle redirection or success */
+    if (signupRes?.message === "Signup successful") {
+      return res.redirect(signupRes?.action);
+    }
+if (signupRes?.message === "User already exists") {
+      return res.status(200).json({
+        message: "Token is valid",
+        action: signupRes.action,
+        user: {
+          id: signupRes.userId,
+          role: signupRes.role,
+        },
+      });
+    }
     res.status(200).json({
       message: "Token is valid",
       user: {
-        id: req.user.id,
-        role: req.user.role,
+        id: userId,
+        role: currentRole,
       },
     });
   } catch (error) {
+    const data = error?.data || error?.response?.data;
+
+    if (data?.message === "User already exists") {
+      console.log("✅ Existing OAuth user login:", data.email || req.user.email);
+      return res.status(200).json({
+        message: "Token is valid",
+        action: data.action,
+        user: {
+          id: data.userId || req.user.id,
+          role: data.role || "super_admin",
+        },
+      });
+    }
+
     console.error("Validate Token Error (Gateway):", error);
     res.status(500).json({ message: "Internal Server Error", details: error.message });
   }
@@ -158,7 +213,6 @@ router.put("/update/:userId" , async (req, res) => {
   }
 });
 
-
 /* ---------------------- OAUTH LOGIN ---------------------- */
 router.get("/oauth/login/:provider", async (req, res) => {
   try {
@@ -182,6 +236,24 @@ router.get("/oauth/login/:provider", async (req, res) => {
   } catch (error) {
     console.error("OAuth Login Error (Gateway):", error);
     res.status(500).json({ message: "Internal Server Error", details: error.message });
+  }
+});
+
+// ----------------- Get User by ID -----------------
+router.get("/user/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(id);
+    const dbResponse = await callDBService(`/identity/api/auth/user/${id}`, "GET");
+    const userData = dbResponse.data || dbResponse; 
+    console.log(userData);
+    res.status(200).json(userData);
+  } catch (err) {
+    console.error("Gateway Get User by ID Error:", err.message);
+    res.status(500).json({
+      message: "Failed to get user",
+      details: err.message,
+    });
   }
 });
 
