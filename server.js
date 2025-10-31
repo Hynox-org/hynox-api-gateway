@@ -3,6 +3,7 @@ const cors = require("cors");
 const proxy = require("express-http-proxy");
 const bodyParser = require("body-parser");
 const supabaseAuth = require("./middleware/supabaseAuth");
+const inviteGateway = require("./routes/inviteGateway");
 const authGateway = require("./routes/authGateway");
 const orgGateway = require("./routes/orgGateway");
 require("dotenv").config();
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
 
 app.use("/identity/api/auth", authGateway);
 app.use("/identity/api/org", orgGateway);   
+app.use("/crm/api/invite", inviteGateway);
 
 // ---------- CRM Proxy ----------
 app.use(
@@ -53,6 +55,7 @@ app.use(
       // attach user info for downstream service
       if (req.user) {
   req.headers["x-user-id"] = req.user.id;
+  req.headers["x-user-fullname"] = req.user.fullname;
   req.headers["x-user-role"] = req.user.role; // <-- use req.user.role
   req.headers["x-user-token"] = req.user.token;
 }

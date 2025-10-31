@@ -16,7 +16,7 @@ router.post("/signup", async (req, res) => {
       password,
       countryCode,
       phoneNumber,
-      role = "super_admin",
+      role = "guest",
       serviceName,
       planId,
     } = req.body;
@@ -25,7 +25,7 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // 1️⃣ Create user in Supabase
+    // 1️ Create user in Supabase
     const { data: supabaseData, error: supabaseError } =
       await supabase.auth.signUp({
         email,
@@ -41,7 +41,7 @@ router.post("/signup", async (req, res) => {
     if (!userId)
       return res.status(500).json({ message: "User ID not returned from Supabase" });
 
-    // 2️⃣ Store user in MongoDB through Auth-Service
+    // 2️ Store user in MongoDB through Auth-Service
     const dbResponse = await callDBService("/identity/api/auth/signup", "POST" ,{
       userId,
       fullName,
@@ -54,7 +54,7 @@ router.post("/signup", async (req, res) => {
       role,
     });
 
-    // 3️⃣ Auto login to generate token
+    // 3️ Auto login to generate token
     const { data: loginData, error: loginError } =
       await supabase.auth.signInWithPassword({ email, password });
 
@@ -83,16 +83,16 @@ router.post("/login", async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ message: "Email and password required" });
 
-    // 1️⃣ Authenticate with Supabase
+    // 1️ Authenticate with Supabase
     const { data: supabaseData, error: supabaseError } =
-      await supabase.auth.signInWithPassword({ email, password });
-
+      await supabase.auth.signInWithPassword({ email });
+      console.log(supabaseData);
     if (supabaseError)
       return res.status(401).json({ message: supabaseError.message });
 
     const accessToken = supabaseData.session?.access_token;
     const userId = supabaseData.user?.id;
-    // 2️⃣ Forward to DB Service for org/service linkage
+    // 2️ Forward to DB Service for org/service linkage
     const dbResponse = await callDBService("/identity/api/auth/login","POST" ,{
       email,
       password,
@@ -104,9 +104,10 @@ router.post("/login", async (req, res) => {
     res.status(200).json({
       message: "Login successful",
       accessToken,
-      dbUser: dbResponse.user,
+      user: dbResponse.user,
       action: dbResponse.action,
-      orgDetails: dbResponse.org,
+      orgId: dbResponse.orgId,
+      service: dbResponse.service,
     });
   } catch (error) {
     console.error("Login Error (Gateway):", error);
@@ -124,10 +125,10 @@ router.post("/validate-token", supabaseAuth, async (req, res) => {
     console.log(fullName);
     console.log("🔍 Current metadata role:", currentRole);
 
-    /* 1️⃣ checks user role in supabase */
+    /* 1️ checks user role in supabase */
     if (!currentRole || ["user", "authenticated"].includes(currentRole)) {
       const { error: metadataError } = await supabase.auth.admin.updateUserById(userId, {
-        user_metadata: { ...req.user.user_metadata, role: "super_admin" },
+        user_metadata: { ...req.user.user_metadata, role: "guest" },
       });
 
       if (metadataError) {
@@ -139,7 +140,7 @@ router.post("/validate-token", supabaseAuth, async (req, res) => {
       console.log(`✅ User already has role: ${currentRole}`);
     }
 
-    /* 4️⃣ Sync user to DB microservice */
+    /* 2 Sync user to DB microservice */
     const signupRes = await callDBService("/identity/api/auth/signup", "POST", {
       userId,
       fullName,
@@ -147,14 +148,15 @@ router.post("/validate-token", supabaseAuth, async (req, res) => {
       role: "super_admin",
     });
 
-    /* 5️⃣ Handle redirection or success */
+    /* 2 Handle redirection or success */
     if (signupRes?.message === "Signup successful") {
       return res.redirect(signupRes?.action);
     }
-if (signupRes?.message === "User already exists") {
+    if (signupRes?.message === "User already exists") {
       return res.status(200).json({
         message: "Token is valid",
         action: signupRes.action,
+        orgId: signupRes.orgId,
         user: {
           id: signupRes.userId,
           role: signupRes.role,
@@ -163,6 +165,7 @@ if (signupRes?.message === "User already exists") {
     }
     res.status(200).json({
       message: "Token is valid",
+      orgId: signupRes.orgId,
       user: {
         id: userId,
         role: currentRole,
@@ -176,6 +179,7 @@ if (signupRes?.message === "User already exists") {
       return res.status(200).json({
         message: "Token is valid",
         action: data.action,
+        orgId: data.orgId,
         user: {
           id: data.userId || req.user.id,
           role: data.role || "super_admin",
@@ -239,8 +243,24 @@ router.get("/oauth/login/:provider", async (req, res) => {
   }
 });
 
+// ----------------- Get Users -----------------
+router.get("/users", supabaseAuth, async (req, res) => {
+  try {
+    const dbResponse = await callDBService(`/identity/api/auth/users`, "GET");
+    const userData = dbResponse.data || dbResponse; 
+    console.log(userData);
+    res.status(200).json(userData);
+  } catch (err) {
+    console.error("Gateway Get User Error:", err.message);
+    res.status(500).json({
+      message: "Failed to get user",
+      details: err.message,
+    });
+  }
+});
+
 // ----------------- Get User by ID -----------------
-router.get("/user/:id", async (req, res) => {
+router.get("/user/:id", supabaseAuth, async (req, res) => {
   try {
     const { id } = req.params;
     console.log(id);
@@ -252,6 +272,22 @@ router.get("/user/:id", async (req, res) => {
     console.error("Gateway Get User by ID Error:", err.message);
     res.status(500).json({
       message: "Failed to get user",
+      details: err.message,
+    });
+  }
+});
+
+// ----------------- Set Password -----------------
+router.put("/setpassword",supabaseAuth, async (req, res) => {
+  try{
+    const dbResponse = await callDBService(`/identity/api/auth/setpassword`, "PUT", req.body);
+    res.status(200).json({
+      message: "Password set successfully",
+    });
+  }catch (err) {
+    console.error("Gateway Set Password Error:", err.message);
+    res.status(500).json({
+      message: "Failed to set password",
       details: err.message,
     });
   }
