@@ -1,14 +1,17 @@
 const express = require("express");
 const cors = require("cors");
-// const proxy = require("express-http-proxy");
+const proxy = require("express-http-proxy");
 const bodyParser = require("body-parser");
 const supabaseAuth = require("./middleware/supabaseAuth");
+const inviteGateway = require("./routes/inviteGateway");
 const authGateway = require("./routes/authGateway");
 const orgGateway = require("./routes/orgGateway");
 require("dotenv").config();
-
+const helmet = require("helmet");
 const app = express();
 
+app.use(cors());
+app.use(helmet());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(
@@ -36,11 +39,41 @@ app.use((req, res, next) => {
   });
 
   if (isPublicRoute) return next();
-  return supabaseAuth()(req, res, next);
+  return supabaseAuth(req, res, next);
 });
 
 app.use("/identity/api/auth", authGateway);
-app.use("/identity/api/org", orgGateway);
+app.use("/identity/api/org", orgGateway);   
+app.use("/crm/api/invite", inviteGateway);
+
+// ---------- CRM Proxy ----------
+app.use(
+  "/crm",
+  (req, res, next) => {
+    // Ensure auth before proxying
+    return supabaseAuth(req, res, () => {
+      // attach user info for downstream service
+      if (req.user) {
+  req.headers["x-user-id"] = req.user.id;
+  req.headers["x-user-fullname"] = req.user.fullname;
+  req.headers["x-user-role"] = req.user.role; // <-- use req.user.role
+  req.headers["x-user-token"] = req.user.token;
+}
+
+      next();
+    });
+  },
+  proxy(process.env.CRM_SERVICE, {
+    proxyReqPathResolver: (req) => {
+      // Keep full original path
+      return req.originalUrl;
+    },
+    proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
+      // Headers are already attached above
+      return proxyReqOpts;
+    },
+  })
+);
 
 // Root route
 app.get("/", (req, res) => res.json({ msg: "🚀 API Gateway running" }));

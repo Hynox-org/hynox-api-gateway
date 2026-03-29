@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { createClient } = require("@supabase/supabase-js");
 const { callDBService } = require("../apiRequest");
-const supabaseAuth = require("../middleware/supabaseAuth");
+const roleAuth = require("../middleware/roleAuth");
 
 // Initialize Supabase service role client (admin)
 const supabase = createClient(
@@ -12,10 +12,10 @@ const supabase = createClient(
 );
 
 /* ---------------------- SETUP ORGANIZATION ---------------------- */
-router.post("/setup", supabaseAuth(["super_admin"]), async (req, res) => {
+router.post("/setup", roleAuth(["super_admin"]), async (req, res) => {
   try {
     const { orgName, empCount, serviceName } = req.body;
-    const {  id:userId, role } = req.auth;
+    const {  id:userId, role } = req.user;
 
     // Forward org creation to Auth-Service (DB operation only)
     const dbResponse = await callDBService("/identity/api/org/setup", "POST", {
@@ -23,7 +23,7 @@ router.post("/setup", supabaseAuth(["super_admin"]), async (req, res) => {
       orgName,
       empCount,
       serviceName,
-      role,
+      role:"super_admin",
     });
 
     res.status(201).json({
@@ -33,18 +33,29 @@ router.post("/setup", supabaseAuth(["super_admin"]), async (req, res) => {
     });
   } catch (err) {
     console.error("Gateway Org Setup Error:", err.message);
-    res.status(500).json({ message: "Internal server error", details: err.message });
+
+    // Check if downstream provided custom error JSON
+    if (err.response && err.response.status) {
+      const status = err.response.status || 500;
+      const data = await err.response.json().catch(() => ({}));
+      return res
+        .status(status)
+        .json({ message: data.message || data.error || "Organization setup failed" });
+    }
+
+    //  Default fallback
+    res.status(500).json({
+      message: err.message || "Organization setup failed",
+    });
   }
 });
 
 /* ---------------------- ASSIGN USER UNDER ORG ---------------------- */
-router.post("/assign-user", supabaseAuth(["super_admin"]), async (req, res) => {
+router.post("/assign-user", roleAuth(["super_admin"]), async (req, res) => {
   try {
     const { fullName, email, password, countryCode, phoneNumber, orgId, role } = req.body;
 
-    // console.log(token);
-
-    // 1️⃣ Create user in Supabase (admin-level)
+    // 1️ Create user in Supabase (admin-level)
     const { data: supabaseData, error: supabaseError } =
       await supabase.auth.admin.createUser({
         email,
@@ -59,7 +70,7 @@ router.post("/assign-user", supabaseAuth(["super_admin"]), async (req, res) => {
     if (!userId)
       return res.status(500).json({ message: "User ID missing from Supabase" });
 
-    // 2️⃣ Save in Auth-Service (MongoDB)
+    // 2️ Save in Auth-Service (MongoDB)
     const dbResponse = await callDBService("/identity/api/org/assign-user", "POST", {
       userId,
       fullName,
@@ -83,7 +94,7 @@ router.post("/assign-user", supabaseAuth(["super_admin"]), async (req, res) => {
   }
 });
 /* ---------------------- EDIT ORGANIZATION ---------------------- */
-router.put("/:orgId", supabaseAuth(["super_admin"]), async (req, res) => {
+router.put("/:orgId", roleAuth(["super_admin"]), async (req, res) => {
   try {
     const { orgId } = req.params;
     const { orgName, roles } = req.body;
